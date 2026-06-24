@@ -11,6 +11,12 @@ let serverProcess: ChildProcess | null = null
 let webProcess: UtilityProcess | null = null
 let mainWindow: BrowserWindow | null = null
 
+// ---- CLI args ----
+// Usage: ./Fractal.AppImage --db=my_db_name   (defaults to "fractal_app")
+const DB_NAME = app.commandLine.hasSwitch('db')
+  ? app.commandLine.getSwitchValue('db') || 'fractal_app'
+  : 'fractal_app'
+
 // ---- Path helpers ----
 
 function getResourcePath(...parts: string[]): string {
@@ -29,22 +35,31 @@ function getServerBinPath(): string {
 // fractal-server reads .fractal_server.env from its cwd via pydantic-settings.
 // We use userData so data persists across app launches.
 
-const DEFAULT_ENV = `JWT_EXPIRE_SECONDS=100000
+function buildEnvContent(dbName: string): string {
+  return `JWT_EXPIRE_SECONDS=100000
 FRACTAL_RUNNER_BACKEND=local
-POSTGRES_DB=fractal_test
+POSTGRES_DB=${dbName}
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 FRACTAL_DEFAULT_GROUP_NAME=All
 FRACTAL_ENABLE_TASK_GROUP_RESET=true
 `
+}
 
-function ensureEnvFile(dataDir: string): void {
+function ensureEnvFile(dataDir: string, dbName: string): void {
   const envFile = path.join(dataDir, '.fractal_server.env')
   if (!fs.existsSync(envFile)) {
     const jwtSecret = crypto.randomBytes(32).toString('hex')
     fs.mkdirSync(dataDir, { recursive: true })
-    fs.writeFileSync(envFile, `JWT_SECRET_KEY=${jwtSecret}\n${DEFAULT_ENV}`)
+    fs.writeFileSync(envFile, `JWT_SECRET_KEY=${jwtSecret}\n${buildEnvContent(dbName)}`)
     console.log(`Created ${envFile}`)
+  } else {
+    const content = fs.readFileSync(envFile, 'utf8')
+    const updated = content.replace(/^POSTGRES_DB=.*$/m, `POSTGRES_DB=${dbName}`)
+    if (updated !== content) {
+      fs.writeFileSync(envFile, updated)
+      console.log(`Updated POSTGRES_DB to '${dbName}'`)
+    }
   }
 }
 
@@ -94,10 +109,33 @@ function runCommand(binPath: string, args: string[], cwd: string): Promise<void>
   })
 }
 
-// ---- DB initialization (first launch only) ----
+// ---- DB creation (idempotent) ----
 
-async function initDatabaseIfNeeded(dataDir: string): Promise<void> {
-  const marker = path.join(dataDir, '.db-initialized')
+function ensureDatabase(dbName: string): Promise<void> {
+  return new Promise((resolve) => {
+    const proc = spawn('createdb', [dbName], { env: { ...process.env } })
+    proc.stderr?.on('data', (d: Buffer) => {
+      const msg = d.toString()
+      if (!msg.includes('already exists')) {
+        console.error('[createdb]', msg.trimEnd())
+      }
+    })
+    proc.on('error', (err) => {
+      // createdb not found — log and continue; fractal-server will fail with a clearer message
+      console.error(`createdb not available: ${err.message}`)
+      resolve()
+    })
+    proc.on('exit', (code) => {
+      if (code === 0) console.log(`Database '${dbName}' created.`)
+      resolve()
+    })
+  })
+}
+
+// ---- DB initialization (first launch per db name) ----
+
+async function initDatabaseIfNeeded(dataDir: string, dbName: string): Promise<void> {
+  const marker = path.join(dataDir, `.db-initialized-${dbName}`)
   if (fs.existsSync(marker)) return
 
   console.log('First launch: initializing database…')
@@ -121,10 +159,11 @@ async function initDatabaseIfNeeded(dataDir: string): Promise<void> {
 
 // ---- Service launchers ----
 
-async function startFractalServer(port: number): Promise<void> {
+async function startFractalServer(port: number, dbName: string): Promise<void> {
   const dataDir = app.getPath('userData')
-  ensureEnvFile(dataDir)
-  await initDatabaseIfNeeded(dataDir)
+  ensureEnvFile(dataDir, dbName)
+  await ensureDatabase(dbName)
+  await initDatabaseIfNeeded(dataDir, dbName)
 
   const binPath = getServerBinPath()
   serverProcess = spawn(binPath, ['start', '--host', '127.0.0.1', '--port', String(port)], {
@@ -237,13 +276,15 @@ async function bootstrap(): Promise<void> {
     width: 1400,
     height: 900,
     show: false,
-    title: 'Fractal',
+    title: 'Fractal App',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   })
+
+  mainWindow.on('page-title-updated', (evt) => evt.preventDefault())
 
   await mainWindow.loadURL(
     'data:text/html;charset=utf-8,' + encodeURIComponent(createLoadingHTML()),
@@ -253,7 +294,7 @@ async function bootstrap(): Promise<void> {
   try {
     const serverPort = await findFreePort()
     const webPort = await findFreePort()
-    await startFractalServer(serverPort)
+    await startFractalServer(serverPort, DB_NAME)
     await startFractalWeb(webPort, serverPort)
     await mainWindow.loadURL(`http://127.0.0.1:${webPort}`)
   } catch (err) {

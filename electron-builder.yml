@@ -6,6 +6,8 @@ directories:
   buildResources: build-resources
   output: dist-electron
 
+afterPack: scripts/after-pack.js
+
 files:
   - out/**/*
   - package.json

@@ -29,6 +29,14 @@ Override component versions at build time:
 bash scripts/build-components.sh --server-ref 2.23.7 --web-ref v1.28.4
 ```
 
+Pass a custom PostgreSQL database name at launch (defaults to `fractal_app`):
+```bash
+./dist-electron/Fractal-1.0.0.AppImage --db=my_db_name
+# dev mode:
+npm run dev -- -- --db=my_db_name
+```
+The app creates the database via `createdb` if it does not exist. The marker file that gates first-launch DB init is named `.db-initialized-<dbName>` (in `userData`), so each distinct DB name gets its own independent initialization.
+
 ## Architecture
 
 ```
@@ -64,7 +72,7 @@ electron-builder.yml       # Packaging config; extraResources copies resources/ 
 
 ## TODOs before first working build
 
-1. **fractal-server data directory**: `app.getPath('userData')` is used as the cwd for all fractal-server commands so pydantic-settings can find `.fractal_server.env` there. On first launch the app writes the env file (with a generated `JWT_SECRET_KEY`), runs `set-db`, and runs `init-db-data`. A `.db-initialized` marker file prevents re-running. Edit `DEFAULT_ENV` in `src/main/index.ts` to change default server settings.
+1. **fractal-server data directory**: `app.getPath('userData')` is used as the cwd for all fractal-server commands so pydantic-settings can find `.fractal_server.env` there. On first launch the app writes the env file (with a generated `JWT_SECRET_KEY`), runs `set-db`, and runs `init-db-data`. A `.db-initialized-<dbName>` marker file prevents re-running. Edit `buildEnvContent()` in `src/main/index.ts` to change default server settings.
 
 3. **fractal-web env vars** (`src/main/index.ts` → `startFractalWeb`): all required env vars are set inline. `FRACTAL_SERVER_HOST` points to the fractal-server port. `AUTH_COOKIE_SECURE=false` because the app runs over plain http on localhost.
 
