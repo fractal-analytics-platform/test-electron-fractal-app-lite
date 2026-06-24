@@ -1,0 +1,10 @@
+{
+  "fractalServer": {
+    "repo": "https://github.com/fractal-analytics-platform/fractal-server",
+    "ref": "2.23.7"
+  },
+  "fractalWeb": {
+    "repo": "https://github.com/fractal-analytics-platform/fractal-web",
+    "ref": "v1.28.4"
+  }
+}

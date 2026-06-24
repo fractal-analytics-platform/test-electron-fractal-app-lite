@@ -1,0 +1,21 @@
+{
+  "name": "fractal-electron",
+  "version": "1.0.0",
+  "description": "Electron wrapper that runs fractal-server and serves fractal-web",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev -- --no-sandbox",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "build-components": "bash scripts/build-components.sh",
+    "package": "npm run build && electron-builder",
+    "full-build": "npm run build-components && npm run package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,42 @@
+appId: it.exact-lab.fractal
+productName: Fractal
+copyright: Copyright © 2024 Exact Lab
+
+directories:
+  buildResources: build-resources
+  output: dist-electron
+
+files:
+  - out/**/*
+  - package.json
+
+# PyInstaller onedir output and SvelteKit adapter-node build are bundled as extra resources.
+# Both are populated by scripts/build-components.sh before packaging.
+extraResources:
+  - from: resources/fractal-server
+    to: fractal-server
+  - from: resources/fractal-web
+    to: fractal-web
+
+mac:
+  category: public.app-category.developer-tools
+  # PyInstaller binaries require an entitlement for running unsigned code on macOS 14+
+  # hardenedRuntime: true
+  # entitlements: build-resources/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
