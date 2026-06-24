@@ -19,6 +19,8 @@ extraResources:
     to: fractal-server
   - from: resources/fractal-web
     to: fractal-web
+  - from: build-resources/fractal_logo.png
+    to: fractal_logo.png
 
 mac:
   category: public.app-category.developer-tools

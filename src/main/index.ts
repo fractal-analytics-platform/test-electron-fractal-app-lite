@@ -241,12 +241,23 @@ function terminateAll(): void {
 
 // ---- Window / bootstrap ----
 
+function getLogoDataURI(): string {
+  const logoPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'fractal_logo.png')
+    : path.join(__dirname, '../../build-resources/fractal_logo.png')
+  try {
+    return 'data:image/png;base64,' + fs.readFileSync(logoPath).toString('base64')
+  } catch {
+    return ''
+  }
+}
+
 function createLoadingHTML(): string {
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Fractal</title>
+<title>Fractal App</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -258,12 +269,30 @@ function createLoadingHTML(): string {
     align-items: center;
     justify-content: center;
   }
-  h1 { font-size: 2.5rem; font-weight: 300; letter-spacing: .12em; margin-bottom: .6rem; }
-  p  { opacity: .55; font-size: .9rem; }
+  .container { text-align: center; }
+  .logo {
+    width: 180px;
+    height: 180px;
+    margin-bottom: 1.8rem;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1);
+      filter: drop-shadow(0 4px 18px rgba(137, 180, 250, 0.18));
+    }
+    50% {
+      transform: scale(1.10);
+      filter: drop-shadow(0 8px 32px rgba(137, 180, 250, 0.42));
+    }
+  }
+  h1 { font-size: 2.2rem; font-weight: 300; letter-spacing: .14em; margin-bottom: .5rem; }
+  p  { opacity: .5; font-size: .85rem; letter-spacing: .04em; }
 </style>
 </head>
 <body>
-<div style="text-align:center">
+<div class="container">
+  <img class="logo" src="${getLogoDataURI()}" alt="Fractal">
   <h1>Fractal</h1>
   <p>Starting services, please wait…</p>
 </div>
