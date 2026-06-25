@@ -42,6 +42,13 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Set version from tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm version "$VERSION" --no-git-tag-version
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:

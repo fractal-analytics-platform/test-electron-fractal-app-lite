@@ -153,6 +153,13 @@ PYEOF
   # All PyInstaller paths use absolute references so nothing lands in the submodule.
   cd "$SUBMODULE"
 
+  # On macOS, explicitly target the native CPU architecture so PyInstaller
+  # produces the correct binary even when uv downloads a universal2 Python.
+  PYINSTALLER_ARCH_ARGS=()
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    PYINSTALLER_ARCH_ARGS=(--target-arch "$(uname -m)")
+  fi
+
   echo "==> Running PyInstaller..."
   uv run --with pyinstaller pyinstaller \
     --onedir \
@@ -174,6 +181,7 @@ PYEOF
     --exclude-module PyQt6 \
     --exclude-module PyQt5 \
     --paths "$SUBMODULE/src" \
+    "${PYINSTALLER_ARCH_ARGS[@]}" \
     "$BUILD_DIR/_electron_entry.py"
 
   mkdir -p "$RESOURCES_DIR"
