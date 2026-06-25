@@ -102,7 +102,7 @@ function createLoadingHTML(): string {
 <html>
 <head>
 <meta charset="utf-8">
-<title>Fractal App</title>
+<title>Fractal Lite</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -138,7 +138,7 @@ function createLoadingHTML(): string {
 <body>
 <div class="container">
   <img class="logo" src="${getLogoDataURI()}" alt="Fractal">
-  <h1>Fractal</h1>
+  <h1>Fractal Lite</h1>
   <p>Starting services, please wait…</p>
 </div>
 </body>
@@ -150,7 +150,7 @@ async function bootstrap(): Promise<void> {
     width: 1400,
     height: 900,
     show: false,
-    title: 'Fractal App',
+    title: 'Fractal Lite',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
