@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -49,15 +49,15 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       # Python is needed by the vite.config.js patch (python3 heredoc in the build script).
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -87,7 +87,7 @@ jobs:
       # On tag pushes: upload the distributable to a GitHub Release.
       # All four jobs upload to the same release; the first one creates it.
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: github.ref_type == 'tag'
         with:
           generate_release_notes: true
@@ -98,7 +98,7 @@ jobs:
 
       # On manual runs (workflow_dispatch): expose the build as a downloadable artifact.
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: github.ref_type != 'tag'
         with:
           name: dist-${{ matrix.platform }}
