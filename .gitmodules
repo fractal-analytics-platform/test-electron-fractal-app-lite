@@ -1,0 +1,3 @@
+[submodule "submodules/fractal-app-lite"]
+	path = submodules/fractal-app-lite
+	url = git@github.com:fractal-analytics-platform/fractal-app-lite.git
