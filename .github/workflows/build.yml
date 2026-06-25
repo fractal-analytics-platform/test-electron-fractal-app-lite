@@ -1,0 +1,105 @@
+name: Build and Release
+
+# Runs on every tag push (v*) → uploads to a GitHub Release.
+# Can also be triggered manually from the Actions tab → uploads as workflow artifacts (7 days).
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+            eb_flags: --linux --x64
+
+          # macos-latest is Apple Silicon (arm64); macos-13 is the last Intel runner.
+          - os: macos-latest
+            platform: macos-arm64
+            eb_flags: --mac --arm64
+          - os: macos-13
+            platform: macos-x64
+            eb_flags: --mac --x64
+
+          - os: windows-latest
+            platform: windows-x64
+            eb_flags: --win --x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Python is needed both by the vite.config.js patch (python3 heredoc in the build
+      # script) and by uv / PyInstaller inside the build.
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install npm dependencies
+        run: npm install
+
+      # Builds the SvelteKit frontend (npm ci + npm run build inside the submodule)
+      # and then the PyInstaller onedir binary, placing both under resources/.
+      # shell: bash ensures Git Bash is used on Windows.
+      - name: Build frontend and Python binary
+        shell: bash
+        run: bash scripts/build-components.sh
+
+      - name: Compile TypeScript (electron-vite)
+        run: npm run build
+
+      # Pass explicit --platform --arch flags so electron-builder ignores the arch
+      # arrays in electron-builder.yml and only builds what this runner can produce.
+      # PyInstaller binaries are platform-specific, so cross-compiling is not possible.
+      - name: Package with electron-builder
+        run: npx electron-builder ${{ matrix.eb_flags }}
+        env:
+          # Authenticates electron-builder's GitHub downloads (Electron binary, etc.)
+          # and allows publishing to Releases without hitting anonymous rate limits.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # On tag pushes: upload the distributable to a GitHub Release.
+      # All four jobs upload to the same release; the first one creates it.
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
+        with:
+          generate_release_notes: true
+          # Upload everything in dist-electron/ (installer + auto-update manifest).
+          # Glob matches AppImage / dmg / exe / *.yml depending on the platform.
+          files: dist-electron/*
+          fail_on_unmatched_files: false
+
+      # On manual runs (workflow_dispatch): expose the build as a downloadable artifact.
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        if: github.ref_type != 'tag'
+        with:
+          name: dist-${{ matrix.platform }}
+          path: dist-electron/
+          retention-days: 7

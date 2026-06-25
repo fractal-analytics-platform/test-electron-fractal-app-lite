@@ -274,6 +274,14 @@ npm run dev                          # launch Electron with hot-reload
 npm run build                        # compile TypeScript → out/
 npm run package                      # electron-builder → dist-electron/
 npm run full-build                   # build-components + build + package in one step
+
+# CI / GitHub Actions
+# Push a tag to trigger the build workflow:
+git tag v1.0.0 && git push origin v1.0.0
+# The workflow (.github/workflows/build.yml) builds Linux (x64), macOS (arm64 + x64),
+# and Windows (x64) in parallel and uploads the distributables to a GitHub Release.
+# Trigger manually from the Actions tab to build without creating a release
+# (artifacts are kept for 7 days).
 ```
 
 ---
