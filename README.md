@@ -15,7 +15,9 @@ Fractal Lite is a desktop application that packages [fractal-app-lite](https://g
 
 The Python backend (FastAPI + uvicorn) and the SvelteKit frontend are bundled as a self-contained binary via PyInstaller. No Python installation is required on the user's machine.
 
-## Download
+---
+
+## Download and install
 
 Pre-built installers are available on the [Releases](../../releases) page.
 
@@ -26,49 +28,123 @@ Pre-built installers are available on the [Releases](../../releases) page.
 | Windows | `FractalLite-x.y.z-win-x64.exe` |
 | Linux | `FractalLite-x.y.z-linux-x86_64.AppImage` |
 
-### macOS note
+### macOS
 
-The app is not notarized. macOS will block it on first launch. To open it:  
-**System Settings → Privacy & Security → scroll down → "Open Anyway"**.
+The app is not notarized. macOS will block it on first launch.  
+Go to **System Settings → Privacy & Security → scroll down → "Open Anyway"**.
 
-### Linux note
+### Linux
 
-The AppImage must be marked as executable before running:
+The AppImage must be marked executable before running:
+
 ```bash
 chmod +x FractalLite-*.AppImage
 ./FractalLite-*.AppImage
 ```
 
+### Windows
+
+Run the installer (`.exe`). Windows Defender SmartScreen may warn about an unknown publisher — click "More info → Run anyway".
+
+---
+
+## How it works
+
+When you launch Fractal Lite, Electron starts a Python server (`fractal-app-lite`) in the background, waits for it to be ready, then opens a browser window pointing at it. The entire UI and application logic lives inside the Python/SvelteKit bundle — Electron is only the container.
+
+```
+Electron (main process)
+  │
+  ├─ spawns ──► fractal-app-lite  (Python / uvicorn / FastAPI)
+  │                │
+  │                ├─ GET /api/*   → Python handlers
+  │                └─ GET /*       → static SvelteKit frontend
+  │
+  └─ opens ───► BrowserWindow → http://127.0.0.1:<random port>
+```
+
+The port is chosen randomly at startup, so there are no conflicts with other services.
+
+---
+
 ## Building from source
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 20+
+- [Node.js](https://nodejs.org/) 22+
 - [Python](https://www.python.org/) 3.12+
 - Git
 
-### Steps
+### Setup
 
 ```bash
-# 1. Pull submodules
+# After cloning the repo, pull the Python submodule
 git submodule update --init --recursive
 
-# 2. Install Node dependencies
+# Install Node dependencies
 npm install
-
-# 3. Build the Python backend and SvelteKit frontend
-npm run build-components
-
-# 4. Launch in development mode
-npm run dev
-
-# — or — build a distributable
-npm run package
 ```
 
-## Architecture
+### Build the Python backend and frontend
 
-Electron spawns the `fractal-app-lite` binary as a child process, waits for its HTTP server to be ready, then points a `BrowserWindow` at it. The entire application UI and logic lives inside the Python/SvelteKit bundle; Electron is only the container.
+This step compiles the SvelteKit frontend and packages the Python backend into a self-contained binary using PyInstaller. It only needs to be re-run when the Python code or frontend changes.
+
+```bash
+npm run build-components
+```
+
+Partial rebuilds:
+
+```bash
+bash scripts/build-components.sh --web-only     # rebuild only the SvelteKit frontend
+bash scripts/build-components.sh --server-only  # rebuild only the Python binary
+```
+
+### Run in development mode
+
+```bash
+npm run dev
+```
+
+This compiles the TypeScript with hot-reload and launches Electron directly from the source tree. `npm run build-components` must have been run at least once first.
+
+### Build a distributable
+
+```bash
+npm run package          # build for the current platform → dist-electron/
+npm run full-build       # build-components + package in one step
+```
+
+### Other useful commands
+
+```bash
+npm run typecheck        # type-check the main process TypeScript (no output = clean)
+npm run build            # compile TypeScript only → out/
+```
+
+---
+
+## Releasing a new version
+
+```bash
+npm version patch        # or: minor, major
+git push && git push --tags
+```
+
+`npm version` bumps `package.json`, creates a git commit, and creates the version tag (e.g. `v0.2.0`). Pushing the tag triggers the CI workflow, which builds for all platforms and uploads the distributables to a GitHub Release automatically.
+
+To trigger a build without creating a release (useful for testing), run the workflow manually from the **Actions** tab. Artifacts are kept for 7 days.
+
+---
+
+## Notes
+
+- **No database** — fractal-app-lite uses in-memory state and file-based project storage.
+- **macOS code-signing** — for public distribution, uncomment the `hardenedRuntime` / `entitlements` lines in `electron-builder.yml` and provide an Apple Developer certificate.
+- **macOS notarization** — requires an Apple Developer account and the `CSC_LINK` / `APPLE_ID` environment variables set when running `electron-builder`.
+- **`fractal-web-clone`** — the `submodules/fractal-app-lite/fractal-web-clone/` directory is created by `build-components.sh` (not a git submodule). Delete it and re-run the build script to refresh it.
+
+---
 
 ## License
 

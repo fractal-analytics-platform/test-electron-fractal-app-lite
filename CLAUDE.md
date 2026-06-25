@@ -256,32 +256,16 @@ const base = app.isPackaged
 
 ## Commands reference
 
+See `README.md` for the full commands reference. Key commands for development:
+
 ```bash
-# One-time setup
 npm install                          # install Electron/TypeScript toolchain
 git submodule update --init --recursive  # populate submodules/fractal-app-lite/
-
-# Build the Python+frontend bundle (do this before npm run dev or npm run package)
-npm run build-components             # build everything
-bash scripts/build-components.sh --web-only     # rebuild only the SvelteKit frontend
-bash scripts/build-components.sh --server-only  # rebuild only the PyInstaller binary
-
-# Development
-npm run typecheck                    # type-check main process TypeScript (no output = clean)
+npm run build-components             # build Python binary + frontend
 npm run dev                          # launch Electron with hot-reload
-
-# Distribution
-npm run build                        # compile TypeScript → out/
-npm run package                      # electron-builder → dist-electron/
-npm run full-build                   # build-components + build + package in one step
-
-# CI / GitHub Actions
-# Push a tag to trigger the build workflow:
-git tag v1.0.0 && git push origin v1.0.0
-# The workflow (.github/workflows/build.yml) builds Linux (x64), macOS (arm64 + x64),
-# and Windows (x64) in parallel and uploads the distributables to a GitHub Release.
-# Trigger manually from the Actions tab to build without creating a release
-# (artifacts are kept for 7 days).
+npm run typecheck                    # type-check TypeScript (no output = clean)
+npm run full-build                   # build-components + build + package
+npm version patch && git push && git push --tags  # release
 ```
 
 ---
