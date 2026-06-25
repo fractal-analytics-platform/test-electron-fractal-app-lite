@@ -4,8 +4,9 @@ const path = require('path')
 module.exports = async function (context) {
   if (context.electronPlatformName !== 'linux') return
 
-  const bin = path.join(context.appOutDir, 'fractal-electron')
-  const realBin = path.join(context.appOutDir, 'fractal-electron.bin')
+  const execName = context.packager.executableName
+  const bin = path.join(context.appOutDir, execName)
+  const realBin = path.join(context.appOutDir, execName + '.bin')
 
   if (!fs.existsSync(bin)) return
 
@@ -13,7 +14,7 @@ module.exports = async function (context) {
 
   fs.writeFileSync(
     bin,
-    `#!/bin/bash\nexec "$(dirname "$0")/fractal-electron.bin" --no-sandbox "$@"\n`
+    `#!/bin/bash\nexec "$(dirname "$0")/${execName}.bin" --no-sandbox "$@"\n`
   )
   fs.chmodSync(bin, '0755')
 }
