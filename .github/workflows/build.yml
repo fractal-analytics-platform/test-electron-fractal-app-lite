@@ -22,13 +22,13 @@ jobs:
             platform: linux-x64
             eb_flags: --linux --x64
 
-          # macos-latest is Apple Silicon (arm64); macos-13 is the last Intel runner.
+          # macos-latest is Apple Silicon (arm64).
+          # Intel Mac users can run this build transparently via Rosetta 2.
+          # (macos-13 is the last Intel GitHub runner but its pool is tiny and
+          # jobs routinely queue forever, so we skip the x64 build.)
           - os: macos-latest
             platform: macos-arm64
             eb_flags: --mac --arm64
-          - os: macos-13
-            platform: macos-x64
-            eb_flags: --mac --x64
 
           - os: windows-latest
             platform: windows-x64
