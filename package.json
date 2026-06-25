@@ -1,6 +1,6 @@
 {
-  "name": "fractal-electron",
-  "version": "1.0.0",
+  "name": "fractal-lite",
+  "version": "0.1.0",
   "description": "Electron wrapper that runs fractal-server and serves fractal-web",
   "main": "out/main/index.js",
   "scripts": {
