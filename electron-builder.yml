@@ -1,6 +1,6 @@
 appId: it.exact-lab.fractal
 productName: Fractal Lite
-artifactName: FractalLite-${version}-${arch}.${ext}
+artifactName: FractalLite-${version}-${os}-${arch}.${ext}
 copyright: Copyright © 2024 Exact Lab
 
 directories:
