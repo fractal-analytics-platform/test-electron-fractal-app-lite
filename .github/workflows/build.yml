@@ -23,13 +23,15 @@ jobs:
             eb_flags: --linux --x64
 
           # macos-15 is Apple Silicon (arm64).
-          # Intel Mac users can run this build transparently via Rosetta 2.
-          # (macos-13 is the last Intel GitHub runner but its pool is tiny and
-          # jobs routinely queue forever, so we skip the x64 build.)
           # Pinned to macos-15: macos-latest migrated to macOS 26 on 2026-06-15.
           - os: macos-15
             platform: macos-arm64
             eb_flags: --mac --arm64
+
+          # macos-13 is the last Intel (x64) GitHub runner.
+          - os: macos-13
+            platform: macos-x64
+            eb_flags: --mac --x64
 
           - os: windows-latest
             platform: windows-x64
