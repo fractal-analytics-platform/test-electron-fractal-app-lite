@@ -204,9 +204,11 @@ The SvelteKit frontend imports a component library called `fractal-components`. 
 
 Runs `npm ci && npm run build` inside `submodules/fractal-app-lite/src/frontend/`. SvelteKit with `adapter-static` compiles the Svelte components into plain HTML, JavaScript, and CSS files in `src/frontend/build/`. These are static files — no server-side rendering, no Node.js needed at runtime.
 
+Because `fractal-web-clone` has no `node_modules` of its own, vite 8's bundler (rolldown) cannot resolve its dependencies at build time. The script temporarily patches `vite.config.js` to add `resolve.dedupe` — forcing those packages to resolve from the frontend's own `node_modules`. It reads the committed file content directly from git, writes the patched version, runs the build, then restores the original with `git checkout`. The submodule working tree is clean before and after.
+
 **1c. Build the PyInstaller binary**
 
-Writes a temporary `_electron_entry.py` to the submodule root:
+Creates a temporary directory outside the submodule and writes `_electron_entry.py` there:
 ```python
 # Starts uvicorn with --host / --port CLI args.
 # This replaces the original shell.py which used pywebview (a native window).
@@ -214,9 +216,9 @@ Writes a temporary `_electron_entry.py` to the submodule root:
 uvicorn.run(app, host=args.host, port=args.port, log_level='info')
 ```
 
-Then runs PyInstaller in `--onedir` mode, which produces a directory (not a single file) containing the executable and all its dependencies. The key flag is:
+Then runs PyInstaller in `--onedir` mode, which produces a directory (not a single file) containing the executable and all its dependencies. All PyInstaller outputs (spec file, build tree, dist tree) are redirected to that temp directory via `--specpath`, `--workpath`, and `--distpath` — nothing lands in the submodule. The key flag is:
 ```
---add-data "src/frontend/build:frontend/build"
+--add-data "<absolute-path>/src/frontend/build:frontend/build"
 ```
 This copies the compiled SvelteKit static files into the bundle at `_internal/frontend/build/`. FastAPI's `backend/main.py` finds them at runtime using:
 ```python
@@ -224,7 +226,7 @@ _FRONTEND_BUILD = Path(__file__).resolve().parents[1] / "frontend" / "build"
 ```
 Inside the PyInstaller bundle, `__file__` for any module resolves inside `_internal/`, so `parents[1]` is `_internal/` and the path resolves correctly.
 
-The output is copied to `resources/fractal-app-lite/`.
+The output is copied to `resources/fractal-app-lite/`. The temp directory and any `uv.lock` written by uv into the submodule are removed by a shell trap on script exit, leaving the submodule clean.
 
 ### Step 2 — Build the Electron app (`npm run build` + `npm run package`)
 

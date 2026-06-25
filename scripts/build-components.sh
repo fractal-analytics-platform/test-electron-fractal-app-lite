@@ -23,6 +23,7 @@ done
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SUBMODULE="$REPO_ROOT/submodules/fractal-app-lite"
 RESOURCES_DIR="$REPO_ROOT/resources"
+VITE_CONFIG="$SUBMODULE/src/frontend/vite.config.js"
 
 if [[ ! -d "$SUBMODULE/src/backend" ]]; then
   echo "Error: submodule not found at $SUBMODULE"
@@ -34,7 +35,7 @@ fi
 # vite.config.js aliases `fractal-components` to fractal-web-clone/components/src/lib/index.js.
 # The tag is hardcoded in vite.config.js; update it there if you need a newer version.
 if $BUILD_WEB; then
-  FRACTAL_WEB_REF=$(grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" "$SUBMODULE/src/frontend/vite.config.js" | head -1)
+  FRACTAL_WEB_REF=$(grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" "$VITE_CONFIG" | head -1)
   FRACTAL_WEB_CLONE="$SUBMODULE/fractal-web-clone"
   if [[ ! -d "$FRACTAL_WEB_CLONE" ]]; then
     echo "==> Cloning fractal-web @ $FRACTAL_WEB_REF into submodule (fractal-web-clone)..."
@@ -47,13 +48,52 @@ if $BUILD_WEB; then
 fi
 
 # ---- Frontend → SvelteKit adapter-static build ----
-# The built static files are bundled into the PyInstaller binary via --add-data
-# and served by FastAPI's StaticFiles mount (see backend/main.py).
+# fractal-web-clone has no node_modules of its own, so rolldown (vite 8) can't
+# resolve its deps. We temporarily patch vite.config.js to add resolve.dedupe,
+# then restore the original file so the submodule stays clean.
 if $BUILD_WEB; then
   echo "==> Building fractal-lite frontend..."
+
+  # Patch vite.config.js temporarily to add resolve.dedupe (needed for vite 8 /
+  # rolldown to resolve fractal-web-clone deps from this project's node_modules).
+  # We read the committed version from git so the starting state of the working
+  # tree doesn't matter, and restore with `git checkout` afterwards so the
+  # submodule is always clean when we're done.
+  restore_vite_config() {
+    git -C "$SUBMODULE" checkout -- src/frontend/vite.config.js 2>/dev/null || true
+  }
+  trap restore_vite_config EXIT
+
+  export VITE_CONFIG SUBMODULE
+  python3 - << 'PYEOF'
+import sys, os, subprocess
+
+path = os.environ['VITE_CONFIG']
+submodule = os.environ['SUBMODULE']
+
+# Read the committed (clean) content so we always patch the same baseline.
+result = subprocess.run(
+    ['git', 'show', 'HEAD:src/frontend/vite.config.js'],
+    cwd=submodule, capture_output=True, text=True, check=True
+)
+original = result.stdout
+patched = original.replace(
+    "alias: {\n\t\t\t'fractal-components': fractalComponents\n\t\t}\n\t},",
+    "alias: {\n\t\t\t'fractal-components': fractalComponents\n\t\t},\n\t\tdedupe: ['ajv', 'ajv-formats', 'slim-select', 'svelte', 'color-hash']\n\t},"
+)
+if patched == original:
+    print('ERROR: vite.config.js patch did not apply — structure may have changed', file=sys.stderr)
+    sys.exit(1)
+open(path, 'w').write(patched)
+PYEOF
+
   cd "$SUBMODULE/src/frontend"
   npm ci
   npm run build
+
+  restore_vite_config
+  trap - EXIT
+
   echo "    → $SUBMODULE/src/frontend/build/"
 fi
 
@@ -69,11 +109,14 @@ if $BUILD_SERVER; then
     exit 1
   fi
 
-  cd "$SUBMODULE"
+  # All PyInstaller outputs (spec, build/, dist/) go to a temp dir outside the
+  # submodule. uv.lock and any stray .spec files are cleaned up on exit.
 
-  # Electron entry point: runs uvicorn with --host/--port CLI args.
-  # No pywebview — Electron's BrowserWindow replaces it.
-  cat > _electron_entry.py << 'PYEOF'
+  BUILD_DIR=$(mktemp -d)
+  trap 'rm -rf "$BUILD_DIR"; rm -f "$SUBMODULE/uv.lock" "$SUBMODULE"/*.spec' EXIT
+
+  # Write the entry point outside the submodule.
+  cat > "$BUILD_DIR/_electron_entry.py" << 'PYEOF'
 import sys
 import multiprocessing
 
@@ -91,16 +134,20 @@ if __name__ == '__main__':
     uvicorn.run(app, host=args.host, port=args.port, log_level='info')
 PYEOF
 
+  # cd into the submodule so uv finds the project and Python path is correct.
+  # All PyInstaller paths use absolute references so nothing lands in the submodule.
+  cd "$SUBMODULE"
+
   echo "==> Running PyInstaller..."
-  # --paths src  lets PyInstaller find the backend and fractal_lite packages
-  # --add-data   bundles the static frontend; backend/main.py resolves it via
-  #              Path(__file__).parents[1] / "frontend" / "build" inside _MEIPASS
   uv run --with pyinstaller pyinstaller \
     --onedir \
     --name fractal-app-lite \
     --clean \
     --noconfirm \
-    --add-data "src/frontend/build:frontend/build" \
+    --specpath "$BUILD_DIR" \
+    --workpath "$BUILD_DIR/build" \
+    --distpath "$BUILD_DIR/dist" \
+    --add-data "$SUBMODULE/src/frontend/build:frontend/build" \
     --collect-all backend \
     --collect-all fractal_lite \
     --collect-all uvicorn \
@@ -111,16 +158,15 @@ PYEOF
     --exclude-module webview \
     --exclude-module PyQt6 \
     --exclude-module PyQt5 \
-    --paths src \
-    _electron_entry.py
-
-  rm -f _electron_entry.py
+    --paths "$SUBMODULE/src" \
+    "$BUILD_DIR/_electron_entry.py"
 
   mkdir -p "$RESOURCES_DIR"
   rm -rf "$RESOURCES_DIR/fractal-app-lite"
-  cp -r dist/fractal-app-lite "$RESOURCES_DIR/fractal-app-lite"
+  cp -r "$BUILD_DIR/dist/fractal-app-lite" "$RESOURCES_DIR/fractal-app-lite"
   echo "    → resources/fractal-app-lite/"
 fi
+# Trap fires here on script exit, cleaning up BUILD_DIR + submodule artifacts.
 
 echo ""
 echo "Done. Run 'npm run package' to build the distributable."
