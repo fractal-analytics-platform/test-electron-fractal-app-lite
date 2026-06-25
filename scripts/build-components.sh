@@ -110,10 +110,11 @@ if $BUILD_SERVER; then
   fi
 
   # All PyInstaller outputs (spec, build/, dist/) go to a temp dir outside the
-  # submodule. uv.lock and any stray .spec files are cleaned up on exit.
+  # submodule. uv.lock, any stray .spec files, and the uv-created .venv are
+  # cleaned up on exit so the submodule stays untouched.
 
   BUILD_DIR=$(mktemp -d)
-  trap 'rm -rf "$BUILD_DIR"; rm -f "$SUBMODULE/uv.lock" "$SUBMODULE"/*.spec' EXIT
+  trap 'rm -rf "$BUILD_DIR" "$SUBMODULE/.venv"; rm -f "$SUBMODULE/uv.lock" "$SUBMODULE"/*.spec' EXIT
 
   # Write the entry point outside the submodule.
   cat > "$BUILD_DIR/_electron_entry.py" << 'PYEOF'
@@ -134,6 +135,20 @@ if __name__ == '__main__':
     uvicorn.run(app, host=args.host, port=args.port, log_level='info')
 PYEOF
 
+  # Build the --add-data argument.
+  # On Windows (Git Bash / MSYS2), MSYS2 automatically converts POSIX paths in
+  # arguments passed to Windows executables. The colon in "source:dest" collides
+  # with Windows drive-letter syntax, so MSYS2 mangles the path: it converts
+  # "/d/a/.../build" to "\d\a\...\build" (missing the drive letter) instead of
+  # the correct "D:\a\...\build". cygpath converts the source to a native Windows
+  # path, and using ";" as the separator prevents MSYS2 from touching the argument.
+  if command -v cygpath >/dev/null 2>&1; then
+    _frontend_native="$(cygpath -w "$SUBMODULE/src/frontend/build")"
+    _add_data="${_frontend_native};frontend/build"
+  else
+    _add_data="$SUBMODULE/src/frontend/build:frontend/build"
+  fi
+
   # cd into the submodule so uv finds the project and Python path is correct.
   # All PyInstaller paths use absolute references so nothing lands in the submodule.
   cd "$SUBMODULE"
@@ -147,7 +162,7 @@ PYEOF
     --specpath "$BUILD_DIR" \
     --workpath "$BUILD_DIR/build" \
     --distpath "$BUILD_DIR/dist" \
-    --add-data "$SUBMODULE/src/frontend/build:frontend/build" \
+    --add-data "$_add_data" \
     --collect-all backend \
     --collect-all fractal_lite \
     --collect-all uvicorn \
