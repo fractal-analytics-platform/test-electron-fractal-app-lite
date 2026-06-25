@@ -50,9 +50,8 @@ chmod +x FractalLite-*.AppImage
 ### Steps
 
 ```bash
-# 1. Clone with submodules
-git clone --recurse-submodules <repo-url>
-cd fractal-electron
+# 1. Pull submodules
+git submodule update --init --recursive
 
 # 2. Install Node dependencies
 npm install
