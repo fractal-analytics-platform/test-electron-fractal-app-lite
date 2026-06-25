@@ -1,21 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain, utilityProcess } from 'electron'
-import type { UtilityProcess } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { spawn } from 'child_process'
 import type { ChildProcess } from 'child_process'
 import * as path from 'path'
 import * as net from 'net'
 import * as fs from 'fs'
-import * as crypto from 'crypto'
 
 let serverProcess: ChildProcess | null = null
-let webProcess: UtilityProcess | null = null
 let mainWindow: BrowserWindow | null = null
-
-// ---- CLI args ----
-// Usage: ./Fractal.AppImage --db=my_db_name   (defaults to "fractal_app")
-const DB_NAME = app.commandLine.hasSwitch('db')
-  ? app.commandLine.getSwitchValue('db') || 'fractal_app'
-  : 'fractal_app'
 
 // ---- Path helpers ----
 
@@ -26,41 +17,9 @@ function getResourcePath(...parts: string[]): string {
   return path.join(base, ...parts)
 }
 
-function getServerBinPath(): string {
-  const binName = process.platform === 'win32' ? 'fractal-server.exe' : 'fractal-server'
-  return getResourcePath('fractal-server', binName)
-}
-
-// ---- Persistent data directory ----
-// fractal-server reads .fractal_server.env from its cwd via pydantic-settings.
-// We use userData so data persists across app launches.
-
-function buildEnvContent(dbName: string): string {
-  return `JWT_EXPIRE_SECONDS=100000
-FRACTAL_RUNNER_BACKEND=local
-POSTGRES_DB=${dbName}
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-FRACTAL_DEFAULT_GROUP_NAME=All
-FRACTAL_ENABLE_TASK_GROUP_RESET=true
-`
-}
-
-function ensureEnvFile(dataDir: string, dbName: string): void {
-  const envFile = path.join(dataDir, '.fractal_server.env')
-  if (!fs.existsSync(envFile)) {
-    const jwtSecret = crypto.randomBytes(32).toString('hex')
-    fs.mkdirSync(dataDir, { recursive: true })
-    fs.writeFileSync(envFile, `JWT_SECRET_KEY=${jwtSecret}\n${buildEnvContent(dbName)}`)
-    console.log(`Created ${envFile}`)
-  } else {
-    const content = fs.readFileSync(envFile, 'utf8')
-    const updated = content.replace(/^POSTGRES_DB=.*$/m, `POSTGRES_DB=${dbName}`)
-    if (updated !== content) {
-      fs.writeFileSync(envFile, updated)
-      console.log(`Updated POSTGRES_DB to '${dbName}'`)
-    }
-  }
+function getAppBinPath(): string {
+  const binName = process.platform === 'win32' ? 'fractal-app-lite.exe' : 'fractal-app-lite'
+  return getResourcePath('fractal-app-lite', binName)
 }
 
 // ---- Port utilities ----
@@ -92,140 +51,27 @@ async function waitForPort(port: number, timeoutMs = 60_000): Promise<void> {
   throw new Error(`Service on port ${port} did not start within ${timeoutMs}ms`)
 }
 
-// ---- One-shot command runner (for set-db / init-db-data) ----
+// ---- Service launcher ----
+// fractal-app-lite is a single FastAPI/uvicorn process that serves both
+// the REST API (/api/*) and the static SvelteKit frontend from one port.
 
-function runCommand(binPath: string, args: string[], cwd: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(binPath, args, { cwd, env: { ...process.env } })
-    proc.stdout?.on('data', (d: Buffer) =>
-      console.log(`[fractal-server ${args[0]}]`, d.toString().trimEnd()))
-    proc.stderr?.on('data', (d: Buffer) =>
-      console.error(`[fractal-server ${args[0]}]`, d.toString().trimEnd()))
-    proc.on('error', reject)
-    proc.on('exit', (code) => {
-      if (code === 0 || code === null) resolve()
-      else reject(new Error(`fractal-server ${args[0]} exited with code ${code}`))
-    })
-  })
-}
-
-// ---- DB creation (idempotent) ----
-
-function ensureDatabase(dbName: string): Promise<void> {
-  return new Promise((resolve) => {
-    const proc = spawn('createdb', [dbName], { env: { ...process.env } })
-    proc.stderr?.on('data', (d: Buffer) => {
-      const msg = d.toString()
-      if (!msg.includes('already exists')) {
-        console.error('[createdb]', msg.trimEnd())
-      }
-    })
-    proc.on('error', (err) => {
-      // createdb not found — log and continue; fractal-server will fail with a clearer message
-      console.error(`createdb not available: ${err.message}`)
-      resolve()
-    })
-    proc.on('exit', (code) => {
-      if (code === 0) console.log(`Database '${dbName}' created.`)
-      resolve()
-    })
-  })
-}
-
-// ---- DB initialization (first launch per db name) ----
-
-async function initDatabaseIfNeeded(dataDir: string, dbName: string): Promise<void> {
-  const marker = path.join(dataDir, `.db-initialized-${dbName}`)
-  if (fs.existsSync(marker)) return
-
-  console.log('First launch: initializing database…')
-  const binPath = getServerBinPath()
-  const projectDir = path.join(dataDir, 'projects')
-  fs.mkdirSync(projectDir, { recursive: true })
-
-  await runCommand(binPath, ['set-db'], dataDir)
-  await runCommand(binPath, [
-    'init-db-data',
-    '--admin-email', 'admin@fractal.xy',
-    '--admin-pwd', '1234',
-    '--admin-project-dir', projectDir,
-    '--resource', 'default',
-    '--profile', 'default',
-  ], dataDir)
-
-  fs.writeFileSync(marker, '')
-  console.log('Database initialized.')
-}
-
-// ---- Service launchers ----
-
-async function startFractalServer(port: number, dbName: string): Promise<void> {
-  const dataDir = app.getPath('userData')
-  ensureEnvFile(dataDir, dbName)
-  await ensureDatabase(dbName)
-  await initDatabaseIfNeeded(dataDir, dbName)
-
-  const binPath = getServerBinPath()
-  serverProcess = spawn(binPath, ['start', '--host', '127.0.0.1', '--port', String(port)], {
-    cwd: dataDir, // pydantic-settings reads .fractal_server.env from cwd
+async function startApp(port: number): Promise<void> {
+  const binPath = getAppBinPath()
+  serverProcess = spawn(binPath, ['--host', '127.0.0.1', '--port', String(port)], {
     env: { ...process.env },
   })
 
   serverProcess.stdout?.on('data', (d: Buffer) =>
-    console.log('[fractal-server]', d.toString().trimEnd()))
+    console.log('[fractal-app-lite]', d.toString().trimEnd()))
   serverProcess.stderr?.on('data', (d: Buffer) =>
-    console.error('[fractal-server]', d.toString().trimEnd()))
+    console.error('[fractal-app-lite]', d.toString().trimEnd()))
   serverProcess.on('exit', (code) => {
     if (code !== 0 && code !== null)
-      console.error(`fractal-server exited with code ${code}`)
+      console.error(`fractal-app-lite exited with code ${code}`)
   })
 
   await waitForPort(port)
-  console.log(`fractal-server ready on :${port}`)
-}
-
-async function startFractalWeb(port: number, serverPort: number): Promise<void> {
-  // SvelteKit adapter-node build produces a standalone Node.js server at build/index.js.
-  // utilityProcess.fork() runs the script using Electron's bundled Node.js,
-  // so no separate Node.js installation is required in the packaged app.
-  const scriptPath = getResourcePath('fractal-web', 'index.js')
-  const dataDir = app.getPath('userData')
-
-  webProcess = utilityProcess.fork(scriptPath, [], {
-    stdio: 'pipe',
-    env: {
-      ...process.env,
-      HOST: '127.0.0.1',
-      PORT: String(port),
-      ORIGIN: `http://127.0.0.1:${port}`,
-      FRACTAL_SERVER_HOST: `http://127.0.0.1:${serverPort}`,
-      FRACTAL_RUNNER_BACKEND: 'local',
-      FRACTAL_DEFAULT_GROUP_NAME: 'All',
-      AUTH_COOKIE_NAME: 'fastapiusersauth',
-      AUTH_COOKIE_SECURE: 'false', // http-only, no TLS
-      AUTH_COOKIE_DOMAIN: '127.0.0.1',
-      AUTH_COOKIE_PATH: '/',
-      AUTH_COOKIE_SAME_SITE: 'lax',
-      LOG_LEVEL_CONSOLE: 'warn',
-      LOG_LEVEL_FILE: 'info',
-      LOG_FILE: path.join(dataDir, 'fractal-web.log'),
-    },
-  })
-
-  webProcess.stdout?.on('data', (d: Buffer) =>
-    console.log('[fractal-web]', d.toString().trimEnd()))
-  webProcess.stderr?.on('data', (d: Buffer) =>
-    console.error('[fractal-web]', d.toString().trimEnd()))
-
-  // Fail immediately if the process exits before the port is ready
-  // (e.g. missing env var causes exit(2) in environment-variables.js)
-  const earlyExit = new Promise<never>((_, reject) => {
-    webProcess!.once('exit', (code) =>
-      reject(new Error(`fractal-web exited with code ${code} before becoming ready`)))
-  })
-
-  await Promise.race([waitForPort(port), earlyExit])
-  console.log(`fractal-web ready on :${port}`)
+  console.log(`fractal-app-lite ready on :${port}`)
 }
 
 // ---- Cleanup ----
@@ -236,7 +82,6 @@ function terminateAll(): void {
     const timeout = setTimeout(() => serverProcess?.kill('SIGKILL'), 5_000)
     serverProcess.once('exit', () => clearTimeout(timeout))
   }
-  webProcess?.kill()
 }
 
 // ---- Window / bootstrap ----
@@ -321,11 +166,9 @@ async function bootstrap(): Promise<void> {
   mainWindow.show()
 
   try {
-    const serverPort = await findFreePort()
-    const webPort = await findFreePort()
-    await startFractalServer(serverPort, DB_NAME)
-    await startFractalWeb(webPort, serverPort)
-    await mainWindow.loadURL(`http://127.0.0.1:${webPort}`)
+    const port = await findFreePort()
+    await startApp(port)
+    await mainWindow.loadURL(`http://127.0.0.1:${port}`)
   } catch (err) {
     terminateAll()
     dialog.showErrorBox('Startup failed', String(err))
@@ -344,5 +187,5 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', terminateAll)
 
-// Allow fractal-web (running in the BrowserWindow) to quit the app cleanly
+// Allow the renderer to quit the app cleanly
 ipcMain.on('app:quit', () => app.quit())

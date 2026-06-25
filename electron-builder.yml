@@ -12,13 +12,11 @@ files:
   - out/**/*
   - package.json
 
-# PyInstaller onedir output and SvelteKit adapter-node build are bundled as extra resources.
-# Both are populated by scripts/build-components.sh before packaging.
+# PyInstaller onedir output (backend + bundled static frontend) is populated
+# by scripts/build-components.sh before packaging.
 extraResources:
-  - from: resources/fractal-server
-    to: fractal-server
-  - from: resources/fractal-web
-    to: fractal-web
+  - from: resources/fractal-app-lite
+    to: fractal-app-lite
   - from: build-resources/fractal_logo.png
     to: fractal_logo.png
 

@@ -1,25 +1,19 @@
 #!/usr/bin/env bash
-# Build fractal-server (PyInstaller) and fractal-web (adapter-node) from their repos.
-# Populates resources/fractal-server/ and resources/fractal-web/ used by electron-builder.
+# Build fractal-app-lite (PyInstaller onedir) and its SvelteKit static frontend
+# from the submodule at submodules/fractal-app-lite/.
+# Populates resources/fractal-app-lite/ used by electron-builder.
 #
 # Usage:
-#   bash scripts/build-components.sh                          # build both (versions from build-config.json)
-#   bash scripts/build-components.sh --server-only            # rebuild only fractal-server
-#   bash scripts/build-components.sh --web-only               # rebuild only fractal-web
-#   bash scripts/build-components.sh --server-ref 2.23.7     # override server version
-#   bash scripts/build-components.sh --web-ref v1.28.4       # override web version
+#   bash scripts/build-components.sh                 # build both
+#   bash scripts/build-components.sh --server-only   # rebuild only the Python backend
+#   bash scripts/build-components.sh --web-only      # rebuild only the frontend
 set -euo pipefail
 
-# ---- Argument parsing ----
-SERVER_REF=""
-WEB_REF=""
 BUILD_SERVER=true
 BUILD_WEB=true
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --server-ref)  SERVER_REF="$2"; shift 2 ;;
-    --web-ref)     WEB_REF="$2";    shift 2 ;;
     --server-only) BUILD_WEB=false;    shift ;;
     --web-only)    BUILD_SERVER=false; shift ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -27,100 +21,105 @@ while [[ $# -gt 0 ]]; do
 done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CONFIG="$REPO_ROOT/build-config.json"
+SUBMODULE="$REPO_ROOT/submodules/fractal-app-lite"
+RESOURCES_DIR="$REPO_ROOT/resources"
 
-if ! command -v jq &>/dev/null; then
-  echo "Error: jq is required (brew install jq / apt-get install jq)"
+if [[ ! -d "$SUBMODULE/src/backend" ]]; then
+  echo "Error: submodule not found at $SUBMODULE"
+  echo "Run: git submodule update --init --recursive"
   exit 1
 fi
 
-[ -z "$SERVER_REF" ] && SERVER_REF=$(jq -r '.fractalServer.ref'  "$CONFIG")
-[ -z "$WEB_REF"    ] && WEB_REF=$(jq -r '.fractalWeb.ref'        "$CONFIG")
-SERVER_REPO=$(jq -r '.fractalServer.repo' "$CONFIG")
-WEB_REPO=$(jq -r '.fractalWeb.repo'       "$CONFIG")
+# ---- fractal-web-clone — vendored component library ----
+# vite.config.js aliases `fractal-components` to fractal-web-clone/components/src/lib/index.js.
+# The tag is hardcoded in vite.config.js; update it there if you need a newer version.
+if $BUILD_WEB; then
+  FRACTAL_WEB_REF=$(grep -o "v[0-9]\+\.[0-9]\+\.[0-9]\+" "$SUBMODULE/src/frontend/vite.config.js" | head -1)
+  FRACTAL_WEB_CLONE="$SUBMODULE/fractal-web-clone"
+  if [[ ! -d "$FRACTAL_WEB_CLONE" ]]; then
+    echo "==> Cloning fractal-web @ $FRACTAL_WEB_REF into submodule (fractal-web-clone)..."
+    git clone --depth 1 --branch "$FRACTAL_WEB_REF" \
+      https://github.com/fractal-analytics-platform/fractal-web.git \
+      "$FRACTAL_WEB_CLONE"
+  else
+    echo "==> fractal-web-clone already present, skipping clone."
+  fi
+fi
 
-RESOURCES_DIR="$REPO_ROOT/resources"
-BUILD_DIR=$(mktemp -d)
-trap 'rm -rf "$BUILD_DIR"' EXIT
+# ---- Frontend → SvelteKit adapter-static build ----
+# The built static files are bundled into the PyInstaller binary via --add-data
+# and served by FastAPI's StaticFiles mount (see backend/main.py).
+if $BUILD_WEB; then
+  echo "==> Building fractal-lite frontend..."
+  cd "$SUBMODULE/src/frontend"
+  npm ci
+  npm run build
+  echo "    → $SUBMODULE/src/frontend/build/"
+fi
 
-echo "Building fractal-electron with:"
-echo "  fractal-server  $SERVER_REF  ($SERVER_REPO)"
-echo "  fractal-web     $WEB_REF  ($WEB_REPO)"
-echo ""
-
-# ---- fractal-server → PyInstaller binary ----
+# ---- Backend → PyInstaller onedir binary ----
 if $BUILD_SERVER; then
-  echo "==> Cloning fractal-server @ $SERVER_REF ..."
-  git clone --depth 1 --branch "$SERVER_REF" "$SERVER_REPO" "$BUILD_DIR/fractal-server"
-  cd "$BUILD_DIR/fractal-server"
+  echo ""
+  echo "==> Building fractal-app-lite with PyInstaller..."
 
-  # fractal-server entry point: fractalctl = "fractal_server.__main__:run"
-  # run() uses argparse; the Electron main process invokes the binary as:
-  #   fractal-server start --host 127.0.0.1 --port <PORT>
+  FRONTEND_BUILD="$SUBMODULE/src/frontend/build"
+  if [[ ! -d "$FRONTEND_BUILD" ]]; then
+    echo "Error: frontend build not found at $FRONTEND_BUILD"
+    echo "Run without --server-only to build the frontend first."
+    exit 1
+  fi
+
+  cd "$SUBMODULE"
+
+  # Electron entry point: runs uvicorn with --host/--port CLI args.
+  # No pywebview — Electron's BrowserWindow replaces it.
   cat > _electron_entry.py << 'PYEOF'
 import sys
 import multiprocessing
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
-    from fractal_server.__main__ import run
-    run()
+    import argparse
+    import uvicorn
+    from backend.main import app
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--host', default='127.0.0.1')
+    parser.add_argument('--port', type=int, default=8765)
+    args, _ = parser.parse_known_args()
+
+    uvicorn.run(app, host=args.host, port=args.port, log_level='info')
 PYEOF
 
-  echo "==> Running PyInstaller ..."
+  echo "==> Running PyInstaller..."
+  # --paths src  lets PyInstaller find the backend and fractal_lite packages
+  # --add-data   bundles the static frontend; backend/main.py resolves it via
+  #              Path(__file__).parents[1] / "frontend" / "build" inside _MEIPASS
   uv run --with pyinstaller pyinstaller \
     --onedir \
-    --name fractal-server \
+    --name fractal-app-lite \
     --clean \
-    --collect-all fractal_server \
+    --noconfirm \
+    --add-data "src/frontend/build:frontend/build" \
+    --collect-all backend \
+    --collect-all fractal_lite \
     --collect-all uvicorn \
-    --collect-all pydantic_settings \
-    --collect-all alembic \
-    --collect-all sqlalchemy \
+    --collect-all fastapi \
+    --collect-all pydantic \
+    --collect-all ngio \
+    --collect-all polars \
+    --exclude-module webview \
+    --exclude-module PyQt6 \
+    --exclude-module PyQt5 \
+    --paths src \
     _electron_entry.py
 
+  rm -f _electron_entry.py
+
   mkdir -p "$RESOURCES_DIR"
-  rm -rf "$RESOURCES_DIR/fractal-server"
-  cp -r dist/fractal-server "$RESOURCES_DIR/fractal-server"
-  echo "    → resources/fractal-server/"
-fi
-
-# ---- fractal-web → SvelteKit adapter-node build ----
-if $BUILD_WEB; then
-  echo ""
-  echo "==> Cloning fractal-web @ $WEB_REF ..."
-  git clone --depth 1 --branch "$WEB_REF" "$WEB_REPO" "$BUILD_DIR/fractal-web"
-  cd "$BUILD_DIR/fractal-web"
-
-  echo "==> Installing fractal-web dependencies ..."
-  npm ci
-
-  echo "==> Building fractal-web ..."
-  npm run build
-
-  if [[ ! -f build/index.js ]]; then
-    echo "Error: build/index.js not found. Does fractal-web use @sveltejs/adapter-node?"
-    exit 1
-  fi
-
-  # Prune devDependencies so we only copy what's needed at runtime
-  echo "==> Pruning fractal-web dev dependencies ..."
-  npm prune --omit=dev
-
-  rm -rf "$RESOURCES_DIR/fractal-web"
-  mkdir -p "$RESOURCES_DIR/fractal-web"
-
-  # Copy the adapter-node build output (index.js, handler.js, server/, client/, etc.)
-  cp -r build/. "$RESOURCES_DIR/fractal-web/"
-
-  # Copy production node_modules — adapter-node leaves external deps unresolved,
-  # so the runtime needs node_modules next to index.js for package resolution.
-  cp -r node_modules "$RESOURCES_DIR/fractal-web/node_modules"
-
-  # Copy package.json for ESM resolution (fractal-web declares "type": "module")
-  cp package.json "$RESOURCES_DIR/fractal-web/package.json"
-
-  echo "    → resources/fractal-web/"
+  rm -rf "$RESOURCES_DIR/fractal-app-lite"
+  cp -r dist/fractal-app-lite "$RESOURCES_DIR/fractal-app-lite"
+  echo "    → resources/fractal-app-lite/"
 fi
 
 echo ""

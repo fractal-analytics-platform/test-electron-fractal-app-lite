@@ -3,5 +3,4 @@ out/
 dist-electron/
 
 # Build artifacts populated by scripts/build-components.sh
-resources/fractal-server/
-resources/fractal-web/
+resources/fractal-app-lite/
