@@ -110,11 +110,11 @@ if $BUILD_SERVER; then
   fi
 
   # All PyInstaller outputs (spec, build/, dist/) go to a temp dir outside the
-  # submodule. uv.lock, any stray .spec files, and the uv-created .venv are
-  # cleaned up on exit so the submodule stays untouched.
+  # submodule. Any stray .spec files are cleaned up on exit so the submodule
+  # stays untouched.
 
   BUILD_DIR=$(mktemp -d)
-  trap 'rm -rf "$BUILD_DIR" "$SUBMODULE/.venv"; rm -f "$SUBMODULE/uv.lock" "$SUBMODULE"/*.spec' EXIT
+  trap 'rm -rf "$BUILD_DIR"; rm -f "$SUBMODULE"/*.spec' EXIT
 
   # Write the entry point outside the submodule.
   cat > "$BUILD_DIR/_electron_entry.py" << 'PYEOF'
@@ -149,19 +149,23 @@ PYEOF
     _add_data="$SUBMODULE/src/frontend/build:frontend/build"
   fi
 
-  # cd into the submodule so uv finds the project and Python path is correct.
+  # cd into the submodule so pixi finds pyproject.toml and the Python env.
   # All PyInstaller paths use absolute references so nothing lands in the submodule.
   cd "$SUBMODULE"
 
+  # pyinstaller is not in the default pixi environment; install it into the
+  # pixi env via pip (does not modify pyproject.toml or pixi.lock).
+  pixi run pip install --quiet pyinstaller
+
   # On macOS, explicitly target the native CPU architecture so PyInstaller
-  # produces the correct binary even when uv downloads a universal2 Python.
+  # produces the correct binary even when the pixi Python is universal2.
   PYINSTALLER_ARCH_ARGS=()
   if [[ "$(uname -s)" == "Darwin" ]]; then
     PYINSTALLER_ARCH_ARGS=(--target-arch "$(uname -m)")
   fi
 
   echo "==> Running PyInstaller..."
-  uv run --with pyinstaller pyinstaller \
+  pixi run pyinstaller \
     --onedir \
     --name fractal-app-lite \
     --clean \

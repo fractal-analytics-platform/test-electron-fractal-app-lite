@@ -226,7 +226,7 @@ _FRONTEND_BUILD = Path(__file__).resolve().parents[1] / "frontend" / "build"
 ```
 Inside the PyInstaller bundle, `__file__` for any module resolves inside `_internal/`, so `parents[1]` is `_internal/` and the path resolves correctly.
 
-The output is copied to `resources/fractal-app-lite/`. The temp directory and any `uv.lock` written by uv into the submodule are removed by a shell trap on script exit, leaving the submodule clean.
+The output is copied to `resources/fractal-app-lite/`. The temp directory and any stray `.spec` files are removed by a shell trap on script exit, leaving the submodule clean. `pyinstaller` is installed into the pixi environment via `pip` at build time and does not appear in `pyproject.toml` or `pixi.lock`.
 
 ### Step 2 — Build the Electron app (`npm run build` + `npm run package`)
 

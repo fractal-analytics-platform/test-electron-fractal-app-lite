@@ -55,17 +55,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # Python is needed both by the vite.config.js patch (python3 heredoc in the build
-      # script) and by uv / PyInstaller inside the build.
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      # pixi manages the Python environment for fractal-app-lite (backend + PyInstaller).
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0.8.8
         with:
-          python-version: '3.12'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
+          manifest-path: submodules/fractal-app-lite/pyproject.toml
+          cache: true
 
       - name: Install npm dependencies
         run: npm install
