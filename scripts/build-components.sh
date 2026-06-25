@@ -149,23 +149,28 @@ PYEOF
     _add_data="$SUBMODULE/src/frontend/build:frontend/build"
   fi
 
-  # cd into the submodule so pixi finds pyproject.toml and the Python env.
+  # cd into the submodule so relative paths and pip install . work correctly.
   # All PyInstaller paths use absolute references so nothing lands in the submodule.
   cd "$SUBMODULE"
 
-  # pyinstaller is not in the default pixi environment; install it into the
-  # pixi env via pip (does not modify pyproject.toml or pixi.lock).
-  pixi run pip install --quiet pyinstaller
+  # Create a plain venv, install the project (+ all its deps) and pyinstaller.
+  python3 -m venv "$BUILD_DIR/venv"
+  if [[ -d "$BUILD_DIR/venv/Scripts" ]]; then
+    VENV_PYTHON="$BUILD_DIR/venv/Scripts/python"  # Windows (Git Bash)
+  else
+    VENV_PYTHON="$BUILD_DIR/venv/bin/python"       # Linux / macOS
+  fi
+  "$VENV_PYTHON" -m pip install --quiet . pyinstaller
 
   # On macOS, explicitly target the native CPU architecture so PyInstaller
-  # produces the correct binary even when the pixi Python is universal2.
+  # produces the correct binary even when the system Python is universal2.
   PYINSTALLER_ARCH_ARGS=()
   if [[ "$(uname -s)" == "Darwin" ]]; then
     PYINSTALLER_ARCH_ARGS=(--target-arch "$(uname -m)")
   fi
 
   echo "==> Running PyInstaller..."
-  pixi run pyinstaller \
+  "$VENV_PYTHON" -m PyInstaller \
     --onedir \
     --name fractal-app-lite \
     --clean \

@@ -44,7 +44,7 @@ chmod +x FractalLite-*.AppImage
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 20+
-- [pixi](https://pixi.sh/)
+- [Python](https://www.python.org/) 3.12+
 - Git
 
 ### Steps
