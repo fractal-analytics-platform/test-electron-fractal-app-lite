@@ -1,7 +1,7 @@
-appId: it.exact-lab.fractal
+appId: fractal-analytics-platform.github.io
 productName: Fractal Lite
 artifactName: FractalLite-${version}-${os}-${arch}.${ext}
-copyright: Copyright © 2024 Exact Lab
+copyright: Copyright © 2026 BioVisionCenter
 
 directories:
   buildResources: build-resources
