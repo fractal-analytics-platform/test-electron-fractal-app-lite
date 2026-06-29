@@ -257,7 +257,7 @@ PYEOF
   else
     VENV_PYTHON="$BUILD_DIR/venv/bin/python"       # Linux / macOS
   fi
-  "$VENV_PYTHON" -m pip install --quiet . pyinstaller
+  "$VENV_PYTHON" -m pip install --quiet . pyinstaller websockets
 
   # On macOS, tell PyInstaller which CPU architecture to target. Without this,
   # if the system Python is a "universal2" binary (supports both arm64 and
