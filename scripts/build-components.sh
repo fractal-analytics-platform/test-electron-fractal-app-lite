@@ -293,6 +293,7 @@ PYEOF
     --collect-all backend \
     --collect-all fractal_lite \
     --collect-all uvicorn \
+    --collect-all websockets \
     --collect-all fastapi \
     --collect-all pydantic \
     --collect-all ngio \
