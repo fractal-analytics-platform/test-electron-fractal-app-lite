@@ -84,6 +84,31 @@ jobs:
           # and allows publishing to Releases without hitting anonymous rate limits.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Report bundle sizes
+        shell: bash
+        run: |
+          echo "=== Distributable ==="
+          ls -lh dist-electron/*.AppImage dist-electron/*.dmg dist-electron/*.exe 2>/dev/null || true
+
+          echo ""
+          echo "=== PyInstaller bundle ==="
+          BUNDLE=$(find dist-electron -maxdepth 6 -type d -name 'fractal-app-lite' | head -1)
+          echo "Path: $BUNDLE"
+          du -sh "$BUNDLE"
+
+          echo "  executable:"
+          find "$BUNDLE" -maxdepth 1 -name 'fractal-app-lite*' ! -type d -exec du -sh {} \;
+
+          echo "  _internal/:"
+          du -sh "$BUNDLE/_internal"
+
+          echo "  _internal/frontend/ (SvelteKit):"
+          du -sh "$BUNDLE/_internal/frontend"
+
+          echo ""
+          echo "=== Top 15 packages in _internal (by size) ==="
+          du -sh "$BUNDLE/_internal/"*/ 2>/dev/null | sort -rh | head -15
+
       # On tag pushes: upload the distributable to a GitHub Release.
       # All four jobs upload to the same release; the first one creates it.
       - name: Upload to GitHub Release
