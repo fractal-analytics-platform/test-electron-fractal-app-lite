@@ -5,6 +5,9 @@ import * as path from 'path'
 import * as net from 'net'
 import * as fs from 'fs'
 
+const appStart = Date.now()
+const t = (label: string): void => console.log(`[TIMING] ${label}: ${Date.now() - appStart}ms`)
+
 let serverProcess: ChildProcess | null = null
 let mainWindow: BrowserWindow | null = null
 
@@ -60,6 +63,7 @@ async function startApp(port: number): Promise<void> {
   serverProcess = spawn(binPath, ['--host', '127.0.0.1', '--port', String(port)], {
     env: { ...process.env },
   })
+  t('python spawned')
 
   serverProcess.stdout?.on('data', (d: Buffer) =>
     console.log('[fractal-app-lite]', d.toString().trimEnd()))
@@ -71,6 +75,7 @@ async function startApp(port: number): Promise<void> {
   })
 
   await waitForPort(port)
+  t('backend ready')
   console.log(`fractal-app-lite ready on :${port}`)
 }
 
@@ -164,10 +169,14 @@ async function bootstrap(): Promise<void> {
     'data:text/html;charset=utf-8,' + encodeURIComponent(createLoadingHTML()),
   )
   mainWindow.show()
+  t('loading screen shown')
 
   try {
     const port = await findFreePort()
+    t('port found')
     await startApp(port)
+    mainWindow.webContents.once('did-finish-load', () => t('page loaded'))
+    t('navigation started')
     await mainWindow.loadURL(`http://127.0.0.1:${port}`)
   } catch (err) {
     terminateAll()
