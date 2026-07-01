@@ -109,6 +109,38 @@ jobs:
           echo "=== Top 15 packages in _internal (by size) ==="
           du -sh "$BUNDLE/_internal/"*/ 2>/dev/null | sort -rh | head -15
 
+      - name: Measure backend startup time
+        shell: bash
+        run: |
+          PORT=18765
+          BINARY=$(find dist-electron -maxdepth 6 \( -name 'fractal-app-lite' -o -name 'fractal-app-lite.exe' \) ! -type d | head -1)
+          echo "Binary: $BINARY"
+
+          "$BINARY" --host 127.0.0.1 --port $PORT &
+          PID=$!
+
+          node -e "
+          const net = require('net');
+          const start = Date.now();
+          const TIMEOUT = 60000;
+          const check = () => {
+            if (Date.now() - start > TIMEOUT) {
+              console.log('Timed out after ' + TIMEOUT + 'ms');
+              process.exit(1);
+            }
+            const s = net.createConnection($PORT, '127.0.0.1');
+            s.on('connect', () => {
+              console.log('Backend ready in ' + (Date.now() - start) + ' ms');
+              s.destroy();
+              process.exit(0);
+            });
+            s.on('error', () => { s.destroy(); setTimeout(check, 100); });
+          };
+          setTimeout(check, 100);
+          "
+
+          kill $PID 2>/dev/null || true
+
       # On tag pushes: upload the distributable to a GitHub Release.
       # All four jobs upload to the same release; the first one creates it.
       - name: Upload to GitHub Release
