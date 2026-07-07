@@ -162,7 +162,7 @@ fractal-electron/
 │           ├── fractal_lite/  Core Python library
 │           └── frontend/      SvelteKit app (builds to static files)
 │
-├── resources/                 GITIGNORED — populated by build-components.sh
+├── resources/                 GITIGNORED — populated by build-backend.sh
 │   └── fractal-app-lite/
 │       ├── fractal-app-lite   The executable (fractal-app-lite.exe on Windows)
 │       └── _internal/         PyInstaller bundle: Python runtime + all packages + static frontend
@@ -175,7 +175,9 @@ fractal-electron/
 │   └── fractal_logo.png       App icon used in the loading screen and packaged app
 │
 ├── scripts/
-│   ├── build-components.sh    Builds frontend + PyInstaller binary from the submodule
+│   ├── build-frontend.sh      Builds the SvelteKit frontend from the submodule
+│   ├── build-backend.sh       Builds the PyInstaller binary (frontend baked in)
+│   ├── build-components.sh    Thin wrapper: runs build-frontend.sh then build-backend.sh
 │   └── after-pack.js          Post-packaging hook: wraps the Linux binary with --no-sandbox
 │
 ├── out/                       GITIGNORED — compiled TypeScript output (electron-vite)
@@ -194,7 +196,7 @@ Getting from source to a runnable app requires two independent build steps.
 
 ### Step 1 — Build the Python + frontend bundle (`npm run build-components`)
 
-This runs `scripts/build-components.sh`, which does three things:
+This runs `scripts/build-components.sh`, a thin wrapper that calls `scripts/build-frontend.sh` (steps 1a–1b) and then `scripts/build-backend.sh` (step 1c). Each part can also be run on its own via `npm run build-frontend` / `npm run build-backend` — but note that the backend build bakes the frontend into the PyInstaller bundle, so a frontend change requires both.
 
 **1a. Clone `fractal-web-clone`** (skipped if already present)
 
@@ -262,6 +264,8 @@ See `README.md` for the full commands reference. Key commands for development:
 npm install                          # install Electron/TypeScript toolchain
 git submodule update --init --recursive  # populate submodules/fractal-app-lite/
 npm run build-components             # build Python binary + frontend
+npm run build-frontend               # build only the SvelteKit frontend
+npm run build-backend                # build only the PyInstaller binary (needs frontend build)
 npm run dev                          # launch Electron with hot-reload
 npm run typecheck                    # type-check TypeScript (no output = clean)
 npm run full-build                   # build-components + build + package
@@ -274,7 +278,7 @@ npm version patch && git push && git push --tags  # release
 
 - **No database**: fractal-app-lite uses in-memory state and file-based project storage. There is no PostgreSQL or any other database.
 - **Port is random**: a free port is chosen at startup. Do not hardcode any port number.
-- **`fractal-web-clone` in the submodule**: the `fractal-web-clone/` directory inside `submodules/fractal-app-lite/` is not itself a submodule — it is a plain directory created by `build-components.sh`. It is gitignored inside the submodule. If you delete it, the next `build-components.sh` run will re-clone it.
+- **`fractal-web-clone` in the submodule**: the `fractal-web-clone/` directory inside `submodules/fractal-app-lite/` is not itself a submodule — it is a plain directory created by `build-frontend.sh`. It is gitignored inside the submodule. If you delete it, the next `build-frontend.sh` run will re-clone it.
 - **macOS code-signing**: PyInstaller binaries on macOS 13+ require the `com.apple.security.cs.allow-unsigned-executable-memory` entitlement. Uncomment and configure the `hardenedRuntime` / `entitlements` lines in `electron-builder.yml` when targeting macOS distribution.
 - **macOS notarization**: for public distribution you need an Apple Developer certificate and the `CSC_LINK` / `APPLE_ID` env vars set when running `electron-builder`.
 - **Linux `--no-sandbox`**: the `scripts/after-pack.js` hook wraps the Linux Electron binary in a shell script that passes `--no-sandbox`, which is required when running as root or in certain container environments.

@@ -64,12 +64,19 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      # Builds the SvelteKit frontend (npm ci + npm run build inside the submodule)
-      # and then the PyInstaller onedir binary, placing both under resources/.
-      # shell: bash ensures Git Bash is used on Windows.
-      - name: Build frontend and Python binary
+      # The two build steps are separate so the Actions UI reports their
+      # durations individually. shell: bash ensures Git Bash is used on Windows.
+
+      # Builds the SvelteKit frontend (npm ci + npm run build inside the submodule).
+      - name: Build frontend
         shell: bash
-        run: bash scripts/build-components.sh
+        run: bash scripts/build-frontend.sh
+
+      # Builds the PyInstaller onedir binary (with the frontend baked in),
+      # placing it under resources/.
+      - name: Build Python binary
+        shell: bash
+        run: bash scripts/build-backend.sh
 
       - name: Compile TypeScript (electron-vite)
         run: npm run build

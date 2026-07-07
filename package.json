@@ -8,6 +8,8 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "build-components": "bash scripts/build-components.sh",
+    "build-frontend": "bash scripts/build-frontend.sh",
+    "build-backend": "bash scripts/build-backend.sh",
     "package": "npm run build && electron-builder",
     "full-build": "npm run build-components && npm run package"
   },

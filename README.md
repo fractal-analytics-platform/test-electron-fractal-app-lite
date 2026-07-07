@@ -93,11 +93,11 @@ This step compiles the SvelteKit frontend and packages the Python backend into a
 npm run build-components
 ```
 
-Partial rebuilds:
+Partial rebuilds (note: the backend build bakes the frontend into the PyInstaller bundle, so after a frontend change you need `build-frontend` **and** `build-backend` for the app to pick it up):
 
 ```bash
-bash scripts/build-components.sh --web-only     # rebuild only the SvelteKit frontend
-bash scripts/build-components.sh --server-only  # rebuild only the Python binary
+npm run build-frontend   # rebuild only the SvelteKit frontend (scripts/build-frontend.sh)
+npm run build-backend    # rebuild only the Python binary (scripts/build-backend.sh)
 ```
 
 ### Run in development mode

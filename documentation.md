@@ -172,12 +172,12 @@ an input to the next.
 
 ```
 Step 1: Build the SvelteKit frontend
-        (npm ci + npm run build inside the submodule)
+        (scripts/build-frontend.sh — npm ci + npm run build inside the submodule)
         Output: submodules/fractal-app-lite/src/frontend/build/
               │
               ▼ (copied into the bundle by PyInstaller)
 Step 2: Bundle the Python backend with PyInstaller
-        (scripts/build-components.sh)
+        (scripts/build-backend.sh)
         Output: resources/fractal-app-lite/
               │
               ▼ (electron-builder picks up resources/)
@@ -223,7 +223,7 @@ The fix is `resolve.dedupe` in `vite.config.js`: this tells Vite "for these
 specific packages, always use the single copy from the root project's
 `node_modules/`, regardless of where the importing code lives." Because
 `vite.config.js` belongs to the submodule, we cannot commit this change without
-dirtying the submodule. So `build-components.sh` applies the patch temporarily
+dirtying the submodule. So `build-frontend.sh` applies the patch temporarily
 just for the duration of the build, then restores the original file.
 
 ### Step 2 — Bundle the Python backend with PyInstaller
@@ -291,8 +291,8 @@ repo. Running `git submodule update --init --recursive` checks out that exact
 commit into `submodules/fractal-app-lite/`.
 
 `fractal-web-clone/` (inside the submodule) is *not* a submodule. It is a plain
-directory created by `build-components.sh` and listed in the submodule's
-`.gitignore`. If you delete it, the next run of `build-components.sh` will
+directory created by `build-frontend.sh` and listed in the submodule's
+`.gitignore`. If you delete it, the next run of `build-frontend.sh` will
 re-clone it.
 
 ---
@@ -319,7 +319,7 @@ Each machine runs the exact same sequence of steps:
 4. Set up Python 3.12  ← needed by the vite.config.js patch (a Python heredoc)
                           and by PyInstaller
 5. npm install         ← installs Electron, TypeScript, electron-vite, electron-builder
-6. build-components.sh ← Step 1 (SvelteKit) + Step 2 (PyInstaller)
+6. build-components.sh ← wrapper: build-frontend.sh (Step 1) + build-backend.sh (Step 2)
 7. npm run build       ← Step 3 (compile TypeScript)
 8. electron-builder    ← Step 4 (package)
 9. Upload result
