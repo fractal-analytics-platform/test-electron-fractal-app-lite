@@ -198,27 +198,19 @@ if $BUILD_SERVER; then
   # We write a replacement entry point that simply starts the uvicorn HTTP
   # server on the host/port passed by Electron, with no GUI. This file lives
   # outside the submodule so it doesn't dirty the submodule working tree.
-  #
-  # multiprocessing.freeze_support() must be the very first call in a frozen
-  # (PyInstaller) app on Windows. Without it, spawning a subprocess causes
-  # Windows to re-execute the main module for each new process, leading to
-  # infinite recursive spawning. On Linux/macOS it is a no-op.
   cat > "$BUILD_DIR/_electron_entry.py" << 'PYEOF'
-import sys
-import multiprocessing
+import argparse
 
-if __name__ == '__main__':
-    multiprocessing.freeze_support()
-    import argparse
-    import uvicorn
-    from backend.main import app
+import uvicorn
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--host', default='127.0.0.1')
-    parser.add_argument('--port', type=int, default=8765)
-    args, _ = parser.parse_known_args()
+from backend.main import app
 
-    uvicorn.run(app, host=args.host, port=args.port, log_level='info')
+parser = argparse.ArgumentParser()
+parser.add_argument('--host', default='127.0.0.1')
+parser.add_argument('--port', type=int, default=8765)
+args, _ = parser.parse_known_args()
+
+uvicorn.run(app, host=args.host, port=args.port, log_level='info')
 PYEOF
 
   # ---- --add-data argument (cross-platform) ----
