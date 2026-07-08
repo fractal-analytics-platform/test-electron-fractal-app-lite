@@ -128,9 +128,9 @@ Before anything else, a `BrowserWindow` is created and a loading page is rendere
 
 `startApp(port)` calls Node.js's `child_process.spawn()` to launch:
 ```
-resources/fractal-app-lite/fractal-app-lite --host 127.0.0.1 --port <port>
+resources/fractal-app-lite/fractal-app-lite --port <port>
 ```
-This is a regular OS child process. Its stdout and stderr are piped to the Electron console. The process runs uvicorn, which starts the FastAPI application.
+The server always binds to 127.0.0.1 (hardcoded in the entry point) so it is never reachable from the network. This is a regular OS child process. Its stdout and stderr are piped to the Electron console. The process runs uvicorn, which starts the FastAPI application.
 
 **Step 4 — Wait for the server to be ready**
 
@@ -212,10 +212,10 @@ Because `fractal-web-clone` has no `node_modules` of its own, vite 8's bundler (
 
 Creates a temporary directory outside the submodule and writes `_electron_entry.py` there:
 ```python
-# Starts uvicorn with --host / --port CLI args.
+# Starts uvicorn on loopback, with the port from the --port CLI arg.
 # This replaces the original shell.py which used pywebview (a native window).
 # In our case, Electron's BrowserWindow takes that role.
-uvicorn.run(app, host=args.host, port=args.port, log_level='info')
+uvicorn.run(app, host='127.0.0.1', port=args.port, log_level='info')
 ```
 
 Then runs PyInstaller in `--onedir` mode, which produces a directory (not a single file) containing the executable and all its dependencies. All PyInstaller outputs (spec file, build tree, dist tree) are redirected to that temp directory via `--specpath`, `--workpath`, and `--distpath` — nothing lands in the submodule. The key flag is:

@@ -60,7 +60,7 @@ async function waitForPort(port: number, timeoutMs = 60_000): Promise<void> {
 
 async function startApp(port: number): Promise<void> {
   const binPath = getAppBinPath()
-  serverProcess = spawn(binPath, ['--host', '127.0.0.1', '--port', String(port)], {
+  serverProcess = spawn(binPath, ['--port', String(port)], {
     env: { ...process.env },
   })
   t('python spawned')

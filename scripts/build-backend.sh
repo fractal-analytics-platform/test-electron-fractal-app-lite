@@ -71,8 +71,9 @@ trap 'rm -rf "$BUILD_DIR"; rm -f "$SUBMODULE"/*.spec' EXIT
 # is our window.
 #
 # We write a replacement entry point that simply starts the uvicorn HTTP
-# server on the host/port passed by Electron, with no GUI. This file lives
-# outside the submodule so it doesn't dirty the submodule working tree.
+# server on the port passed by Electron, with no GUI. The host is always
+# loopback — the server must not be reachable from the network. This file
+# lives outside the submodule so it doesn't dirty the submodule working tree.
 cat > "$BUILD_DIR/_electron_entry.py" << 'PYEOF'
 import argparse
 
@@ -81,11 +82,10 @@ import uvicorn
 from backend.main import app
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--host', default='127.0.0.1')
 parser.add_argument('--port', type=int, default=8765)
 args, _ = parser.parse_known_args()
 
-uvicorn.run(app, host=args.host, port=args.port, log_level='info')
+uvicorn.run(app, host='127.0.0.1', port=args.port, log_level='info')
 PYEOF
 
 # ---- --add-data argument (cross-platform) ----
