@@ -169,9 +169,13 @@ jobs:
         if: github.ref_type == 'tag'
         with:
           generate_release_notes: true
-          # Upload everything in dist-electron/ (installer + auto-update manifest).
-          # Glob matches AppImage / dmg / exe / *.yml depending on the platform.
-          files: dist-electron/*
+          # Upload only the installers — the auto-update metadata (latest*.yml,
+          # *.blockmap) is unused since the app has no electron-updater.
+          # Each platform job matches exactly one of these extensions.
+          files: |
+            dist-electron/*.AppImage
+            dist-electron/*.dmg
+            dist-electron/*.exe
           fail_on_unmatched_files: false
 
       # On manual runs (workflow_dispatch): expose the build as a downloadable artifact.
