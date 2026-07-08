@@ -7,8 +7,10 @@ what each technology is, why it is there, what order things happen in, and why.
 
 ## 1. What the application is
 
-From a user's point of view: they double-click an icon, a desktop window opens,
-and they see a web interface. That is it.
+From a user's point of view: they launch the app, a desktop window opens, and
+they see a web interface. (First launch takes an extra step on every platform,
+because the binaries are not code-signed — see "First launch on each platform"
+in section 4.)
 
 Under the hood, two separate programs are running at the same time:
 
@@ -268,6 +270,31 @@ The output depends on the platform:
 | Linux    | AppImage | A single portable executable file        |
 | macOS    | dmg      | A disk image the user mounts to install  |
 | Windows  | exe      | An NSIS installer                        |
+
+**First launch on each platform**
+
+None of the distributables are code-signed, so on every OS the first launch is
+not a plain double-click:
+
+- **Linux**: the downloaded AppImage is not executable. File permissions are
+  filesystem metadata that an HTTP download does not carry, so this *cannot* be
+  fixed from the release process — the user must set the bit once themselves:
+  `chmod +x FractalLite-*.AppImage`, or in the file manager, Properties →
+  Permissions → "Executable as Program" (then right-click → "Run as a
+  program", or double-click). Shipping the AppImage inside a `.tar.gz` would
+  preserve the bit, but only trades the chmod for an extraction step.
+- **macOS**: double-clicking the dmg works, but Gatekeeper blocks the unsigned
+  app on first open. The user must go to System Settings → Privacy & Security
+  → "Open Anyway". Signing + notarizing with an Apple Developer certificate
+  would remove this (see the commented-out `hardenedRuntime` lines in
+  `electron-builder.yml`).
+- **Windows**: double-clicking the installer works, but SmartScreen shows
+  "Windows protected your PC" for an unknown publisher; the user clicks
+  "More info" → "Run anyway". A Windows code-signing certificate would remove
+  this. After installation, the app launches normally from the Start menu.
+
+The user-facing version of these instructions lives in `README.md`
+("Download and install").
 
 **The Linux `--no-sandbox` wrapper**
 
