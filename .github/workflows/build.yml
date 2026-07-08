@@ -84,11 +84,14 @@ jobs:
       # Pass explicit --platform --arch flags so electron-builder ignores the arch
       # arrays in electron-builder.yml and only builds what this runner can produce.
       # PyInstaller binaries are platform-specific, so cross-compiling is not possible.
+      # --publish never: with GH_TOKEN set on a tag build, electron-builder would
+      # otherwise auto-publish its artifacts (incl. blockmaps and latest*.yml) to
+      # the GitHub Release, bypassing the filtered upload step below.
       - name: Package with electron-builder
-        run: npx electron-builder ${{ matrix.eb_flags }}
+        run: npx electron-builder ${{ matrix.eb_flags }} --publish never
         env:
           # Authenticates electron-builder's GitHub downloads (Electron binary, etc.)
-          # and allows publishing to Releases without hitting anonymous rate limits.
+          # without hitting anonymous rate limits.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Report bundle sizes
