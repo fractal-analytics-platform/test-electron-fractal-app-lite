@@ -7,5 +7,5 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
   },
-  // No renderer — the UI is served by the fractal-web SvelteKit process
+  // No renderer — the UI is the SvelteKit app served by the fractal-app-lite backend
 })

@@ -11,7 +11,7 @@
 
 ---
 
-Fractal Lite is a desktop application that packages [fractal-app-lite](https://github.com/fractal-analytics-platform/fractal-server) into a native window using [Electron](https://www.electronjs.org/). It lets you run the Fractal workflow manager locally without a browser or a server setup — just download, install, and open.
+Fractal Lite is a desktop application that packages [fractal-app-lite](https://github.com/fractal-analytics-platform/fractal-app-lite) into a native window using [Electron](https://www.electronjs.org/). It lets you run the Fractal workflow manager locally without a browser or a server setup — just download, install, and open.
 
 The Python backend (FastAPI + uvicorn) and the SvelteKit frontend are bundled as a self-contained binary via PyInstaller. No Python installation is required on the user's machine.
 

@@ -1,7 +1,7 @@
 {
   "name": "fractal-lite",
   "version": "0.2.0",
-  "description": "Electron wrapper that runs fractal-server and serves fractal-web",
+  "description": "Electron wrapper that runs fractal-app-lite (FastAPI backend + SvelteKit frontend)",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev -- --no-sandbox",
